@@ -1,2 +1,373 @@
-# third-project
-html
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우리들의 소중한 기록 - Mate Diary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .font-handwriting { font-family: 'Nanum Pen Script', cursive; }
+        .diary-card { transition: all 0.2s ease; }
+        .diary-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .loading-spinner { border: 3px solid #f3f3f3; border-top: 3px solid #5eead4; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- 연결 전 화면 (Connection Overlay) -->
+    <div id="connection-screen" class="fixed inset-0 bg-slate-100 z-50 flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center border border-slate-200">
+            <h2 class="text-3xl font-bold text-teal-600 mb-6 font-handwriting">함께 일기 쓰기</h2>
+            
+            <div id="setup-step-1">
+                <p class="text-slate-500 mb-8 text-sm leading-relaxed">공유 코드를 통해 친구나 소중한 사람과<br>일기장을 연결해 보세요.</p>
+                <button id="btn-show-join" class="w-full bg-teal-500 text-white font-bold py-3.5 rounded-2xl mb-3 hover:bg-teal-600 transition shadow-lg shadow-teal-100">코드 입력하고 시작하기</button>
+                <button id="btn-create-code" class="w-full bg-white border-2 border-teal-500 text-teal-500 font-bold py-3.5 rounded-2xl hover:bg-teal-50 transition">새로운 연결 코드 만들기</button>
+                <p class="mt-4 text-[10px] text-slate-400">이미 연결된 코드가 있다면 '코드 입력'을 눌러주세요.</p>
+            </div>
+
+            <div id="setup-step-join" class="hidden">
+                <p class="text-sm text-slate-500 mb-4 text-center">우리만의 고유 코드를 입력하세요</p>
+                <input id="join-code-input" type="text" placeholder="6자리 코드 입력" class="w-full p-4 rounded-2xl bg-slate-50 mb-4 border-2 border-transparent focus:border-teal-300 outline-none text-center font-bold tracking-widest uppercase text-xl">
+                <button id="btn-join-couple" class="w-full bg-teal-500 text-white font-bold py-3.5 rounded-2xl mb-3">일기장 입장하기</button>
+                <button id="btn-back-to-step1" class="text-slate-400 text-sm underline cursor-pointer">처음으로 돌아가기</button>
+            </div>
+
+            <div id="setup-step-code" class="hidden">
+                <p class="text-sm text-slate-500 mb-3">함께 쓸 친구에게 이 코드를 알려주세요</p>
+                <div id="generated-code-display" class="text-3xl font-bold text-teal-600 tracking-widest mb-6 bg-teal-50 py-5 rounded-2xl border-2 border-dashed border-teal-200">------</div>
+                <div class="flex flex-col items-center gap-3">
+                    <div class="loading-spinner"></div>
+                    <p class="text-xs text-teal-500 animate-pulse">상대방의 연결을 기다리는 중입니다...</p>
+                    <button id="btn-cancel-code" class="mt-4 text-slate-400 text-sm underline cursor-pointer">생성 취소하고 돌아가기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 메인 앱 화면 -->
+    <header class="bg-white shadow-sm py-8 px-4 text-center border-b border-slate-200">
+        <div class="max-w-4xl mx-auto relative flex flex-col items-center">
+            <button id="btn-logout" class="absolute top-0 right-0 text-[10px] text-slate-300 hover:text-slate-500 underline uppercase tracking-tighter">코드 해제</button>
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-2xl">📒</span>
+                <h1 class="text-2xl font-bold text-slate-700">우리들의 기록 공간</h1>
+            </div>
+            <div class="flex flex-col items-center mt-3">
+                <p id="d-day-display" class="text-3xl font-bold text-teal-500 font-handwriting">연결 중...</p>
+                <div class="flex items-center gap-2 text-xs text-slate-400 mt-1">
+                    <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                    <span>함께 기록한 지 <span id="days-count" class="font-bold">0</span>일</span>
+                </div>
+            </div>
+            
+            <div id="partner-mood-status" class="md:absolute md:top-8 md:right-0 mt-4 md:mt-0 text-sm bg-teal-50 border border-teal-100 px-4 py-2 rounded-full hidden flex items-center gap-2">
+                <span class="text-teal-600 font-medium text-xs">상대방 상태:</span> 
+                <span id="partner-mood-emoji" class="text-lg">?</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-6">
+        <!-- 일기 작성 섹션 -->
+        <section class="bg-white rounded-3xl p-6 shadow-sm mb-12 border border-slate-200">
+            <div class="flex items-center gap-2 mb-6">
+                <div class="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center text-teal-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold text-slate-700">오늘의 일기 남기기</h2>
+            </div>
+            
+            <div class="space-y-4">
+                <input id="diary-title" type="text" placeholder="제목을 적어보세요" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:border-teal-300 transition-colors">
+                <textarea id="diary-content" rows="4" placeholder="어떤 하루였나요? 함께 나누고 싶은 이야기를 적어주세요." class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:border-teal-300 transition-colors resize-none"></textarea>
+                
+                <div class="flex flex-wrap justify-between items-center gap-4 pt-2">
+                    <div class="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
+                        <span class="text-xs text-slate-400 font-medium">지금 내 기분</span>
+                        <select id="diary-mood" class="bg-transparent text-sm text-slate-600 font-bold outline-none cursor-pointer">
+                            <option value="😊">평온해요 😊</option>
+                            <option value="🚀">의욕뿜뿜 🚀</option>
+                            <option value="🍕">맛난거 먹음 🍕</option>
+                            <option value="☕">여유로워요 ☕</option>
+                            <option value="😴">피곤해요 😴</option>
+                            <option value="✨">즐거워요 ✨</option>
+                        </select>
+                    </div>
+                    <button id="btn-save-diary" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-10 rounded-2xl shadow-lg shadow-teal-100 transition duration-300 w-full md:w-auto">
+                        공유하기
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 기록 리스트 섹션 -->
+        <section>
+            <div class="flex items-center justify-between mb-8">
+                <h2 class="text-xl font-bold text-slate-700 flex items-center gap-2">
+                    <span class="text-teal-500 italic">#</span> 우리의 기록들
+                </h2>
+                <span id="current-code-tag" class="text-[10px] bg-slate-200 text-slate-500 px-2 py-1 rounded font-bold">코드: ------</span>
+            </div>
+            <div id="diary-list" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="col-span-full py-20 text-center text-slate-300 border-2 border-dashed border-slate-100 rounded-3xl">
+                    아직 기록된 이야기가 없어요. 첫 일기를 써보세요!
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="py-12 text-center text-slate-400 text-xs">
+        &copy; 2025 Mate Diary. 함께하는 기록의 즐거움.
+    </footer>
+
+    <!-- Firebase SDK & Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+
+        // --- Firebase 설정 가이드 ---
+        // Firebase 콘솔(console.firebase.google.com)에서 발급받은 실제 정보를 입력하세요.
+        // 이 정보가 없으면 실제 배포 시 데이터가 저장되지 않습니다.
+        let firebaseConfig = {
+            apiKey: "여기에_발급받은_API_키를_넣으세요",
+            authDomain: "여기에_프로젝트_ID.firebaseapp.com",
+            projectId: "여기에_프로젝트_ID",
+            storageBucket: "여기에_프로젝트_ID.appspot.com",
+            messagingSenderId: "여기에_고유_번호",
+            appId: "여기에_앱_ID"
+        };
+
+        // Canvas 미리보기 환경에서는 자동으로 설정값을 불러옵니다.
+        if (typeof __firebase_config !== 'undefined') {
+            firebaseConfig = JSON.parse(__firebase_config);
+        }
+
+        // 설정값이 없는 채로 실제 배포된 경우 사용자에게 알림
+        if (!firebaseConfig.apiKey && !window.location.hostname.includes('canvas')) {
+            const warningMsg = document.createElement('div');
+            warningMsg.className = "fixed bottom-4 left-4 right-4 bg-red-500 text-white p-4 rounded-xl z-[60] text-sm text-center shadow-xl";
+            warningMsg.innerText = "Firebase 설정(Config)이 비어있습니다. 코드를 수정해 주세요!";
+            document.body.appendChild(warningMsg);
+        }
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'mate-diary-unified-v1';
+
+        let currentUser = null;
+        let activeCode = localStorage.getItem('mate_active_code');
+        let currentRoomUnsub = null;
+
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) { 
+                console.error("Firebase 익명 로그인 활성화 여부를 확인하세요.", err); 
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                if (activeCode) {
+                    startApp(activeCode);
+                }
+            }
+        });
+
+        initAuth();
+
+        const generateHexCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+        const createShareCode = async () => {
+            if (!currentUser) return;
+            const newCode = generateHexCode();
+            document.getElementById('generated-code-display').innerText = newCode;
+            document.getElementById('setup-step-1').classList.add('hidden');
+            document.getElementById('setup-step-code').classList.remove('hidden');
+
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', newCode);
+            
+            try {
+                await setDoc(roomRef, {
+                    hostId: currentUser.uid,
+                    createdAt: serverTimestamp(),
+                    status: 'waiting',
+                    startDate: new Date().toISOString(),
+                    lastMood: { [currentUser.uid]: '😊' }
+                });
+
+                currentRoomUnsub = onSnapshot(roomRef, (snapshot) => {
+                    const data = snapshot.data();
+                    if (data && data.status === 'connected') {
+                        if (currentRoomUnsub) currentRoomUnsub();
+                        localStorage.setItem('mate_active_code', newCode);
+                        startApp(newCode);
+                    }
+                });
+            } catch (err) {
+                console.error("방 생성 오류:", err);
+            }
+        };
+
+        const cancelCodeCreation = async () => {
+            const code = document.getElementById('generated-code-display').innerText;
+            if (code && code !== '------') {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+                if (currentRoomUnsub) currentRoomUnsub();
+                try {
+                    await deleteDoc(roomRef);
+                } catch (e) { console.error(e); }
+            }
+            document.getElementById('setup-step-code').classList.add('hidden');
+            document.getElementById('setup-step-1').classList.remove('hidden');
+        };
+
+        const joinCouple = async () => {
+            if (!currentUser) return;
+            const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+            if (!code) return alert('코드를 입력해주세요.');
+
+            try {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+                const roomSnap = await getDoc(roomRef);
+
+                if (!roomSnap.exists()) {
+                    alert('존재하지 않는 코드입니다.');
+                    return;
+                }
+
+                const data = roomSnap.data();
+                if (data.status === 'connected') {
+                    localStorage.setItem('mate_active_code', code);
+                    startApp(code);
+                    return;
+                }
+
+                if (data.status === 'waiting') {
+                    if (data.hostId === currentUser.uid) {
+                        alert('본인이 만든 코드입니다. 상대방의 입장을 기다려주세요.');
+                        return;
+                    }
+                    await updateDoc(roomRef, {
+                        status: 'connected',
+                        guestId: currentUser.uid,
+                        [`lastMood.${currentUser.uid}`]: '😊'
+                    });
+                    localStorage.setItem('mate_active_code', code);
+                    startApp(code);
+                }
+            } catch (err) {
+                alert("연결 중 오류가 발생했습니다.");
+            }
+        };
+
+        function startApp(code) {
+            if (!currentUser) return;
+            activeCode = code;
+            document.getElementById('connection-screen').classList.add('hidden');
+            document.getElementById('current-code-tag').innerText = `코드: ${code}`;
+            
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+            onSnapshot(roomRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const start = new Date(data.startDate);
+                    const days = Math.ceil((new Date() - start) / (1000 * 60 * 60 * 24));
+                    document.getElementById('days-count').innerText = days;
+                    document.getElementById('d-day-display').innerText = `Day ${days}`;
+
+                    const moods = data.lastMood || {};
+                    const partnerId = Object.keys(moods).find(id => id !== currentUser.uid);
+                    if (partnerId) {
+                        document.getElementById('partner-mood-status').classList.remove('hidden');
+                        document.getElementById('partner-mood-emoji').innerText = moods[partnerId];
+                    }
+                }
+            });
+
+            const diaryCol = collection(db, 'artifacts', appId, 'public', 'data', 'diaries_' + code);
+            onSnapshot(diaryCol, (snapshot) => {
+                const list = document.getElementById('diary-list');
+                const diaries = [];
+                snapshot.forEach(doc => diaries.push(doc.data()));
+                if (diaries.length === 0) return;
+
+                list.innerHTML = '';
+                diaries.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                diaries.forEach(data => {
+                    const isMyDiary = data.author === currentUser.uid;
+                    const card = document.createElement('div');
+                    card.className = `diary-card bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col ${isMyDiary ? 'border-teal-200 bg-teal-50/20' : ''}`;
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="text-[10px] font-bold text-slate-300 uppercase tracking-tighter bg-slate-100 px-2 py-1 rounded-md">${data.date}</span>
+                            <span class="text-xl">${data.mood}</span>
+                        </div>
+                        <h3 class="font-bold text-lg mb-2 text-slate-800">${data.title}</h3>
+                        <p class="text-slate-500 text-sm leading-relaxed flex-grow whitespace-pre-wrap">${data.content}</p>
+                        <div class="mt-4 pt-4 border-t border-slate-50 flex items-center gap-1">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">${isMyDiary ? '나의 기록' : '상대방의 기록'}</span>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            }, (err) => console.error("Firestore Error:", err));
+        }
+
+        const saveDiary = async () => {
+            if (!currentUser || !activeCode) return;
+            const title = document.getElementById('diary-title').value.trim();
+            const content = document.getElementById('diary-content').value.trim();
+            const mood = document.getElementById('diary-mood').value;
+            if (!title || !content) return alert('제목과 내용을 입력해주세요.');
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'diaries_' + activeCode), {
+                    title, content, mood,
+                    author: currentUser.uid,
+                    date: new Date().toLocaleDateString(),
+                    createdAt: serverTimestamp()
+                });
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', activeCode);
+                await updateDoc(roomRef, { [`lastMood.${currentUser.uid}`]: mood });
+                document.getElementById('diary-title').value = '';
+                document.getElementById('diary-content').value = '';
+            } catch (e) { alert("저장 중 오류가 발생했습니다."); }
+        };
+
+        window.addEventListener('load', () => {
+            document.getElementById('btn-show-join').addEventListener('click', () => {
+                document.getElementById('setup-step-1').classList.add('hidden');
+                document.getElementById('setup-step-join').classList.remove('hidden');
+            });
+            document.getElementById('btn-create-code').addEventListener('click', createShareCode);
+            document.getElementById('btn-join-couple').addEventListener('click', joinCouple);
+            document.getElementById('btn-cancel-code').addEventListener('click', cancelCodeCreation);
+            document.getElementById('btn-back-to-step1').addEventListener('click', () => {
+                document.getElementById('setup-step-join').classList.add('hidden');
+                document.getElementById('setup-step-1').classList.remove('hidden');
+            });
+            document.getElementById('btn-save-diary').addEventListener('click', saveDiary);
+            document.getElementById('btn-logout').addEventListener('click', () => {
+                if(confirm('이 기기에서 코드를 해제하시겠습니까?')) {
+                    localStorage.removeItem('mate_active_code');
+                    location.reload();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
